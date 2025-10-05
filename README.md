@@ -17,7 +17,7 @@ The implementation demonstrates core machine learning concepts while achieving c
 ##  Architecture
 
 ### Neural Network Structure
-- **Input Layer**: 784 neurons (28×28 pixel images)
+- **Input Layer**: 784 neurons (28x28 pixel images)
 - **2 Hidden Layers**: 512 and 256 neurons
 - **Activations**: ReLU and Softmax
 - **Dropout Layers**: Regularization
@@ -28,7 +28,7 @@ The implementation demonstrates core machine learning concepts while achieving c
 
 This project uses the **MNIST Database of Handwritten Digits**:
 - **60,000 training images** + **10,000 test images**
-- 28×28 pixel grayscale images
+- 28x28 pixel grayscale images
 - 10 classes (digits 0-9)
 
 Reference: [Yann LeCun's MNIST Page](http://yann.lecun.com/exdb/mnist/)

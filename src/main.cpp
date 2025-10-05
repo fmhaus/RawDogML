@@ -93,7 +93,7 @@ static void train(NeuralNetwork& network, Dataset& dataset_train, Dataset& datas
 
 		for (u32 i = 0; i < dataset_test.size(); i++)
 		{
-			auto&	 result = network.forward(dataset_test.images[i]);
+			auto& result = network.forward(dataset_test.images[i]);
 			total_test_loss += loss_criterion.get_loss(result, dataset_test.labels[i]);
 
 			if (get_prediction_index(result) == dataset_test.labels[i])
