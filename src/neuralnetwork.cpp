@@ -272,8 +272,8 @@ Tensor& SoftmaxActivation::backward(const Tensor& out_grad)
 	return in_grad;
 }
 
-DropoutLayer::DropoutLayer(std::mt19937& gen, f32 dropout_chance)
-	: mask(), gen(&gen), dropout_chance(dropout_chance), eval_mode(true)
+DropoutLayer::DropoutLayer(std::mt19937* gen, f32 dropout_chance)
+	: mask(), gen(gen), dropout_chance(dropout_chance), eval_mode(true)
 {
 }
 
@@ -330,6 +330,7 @@ Tensor& DropoutLayer::backward(const Tensor& out_grad)
 void DropoutLayer::eval()
 {
 	eval_mode = true;
+	mask = Tensor();
 }
 
 void DropoutLayer::train()

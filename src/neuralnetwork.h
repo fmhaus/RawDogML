@@ -87,7 +87,7 @@ struct SoftmaxActivation : Layer
 
 struct DropoutLayer : Layer
 {
-	DropoutLayer(std::mt19937& gen, f32 dropout_chance);
+	DropoutLayer(std::mt19937* gen, f32 dropout_chance);
 
 	Tensor& forward(const Tensor& in_act) override;
 	Tensor& backward(const Tensor& out_grad) override;

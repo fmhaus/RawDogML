@@ -130,11 +130,11 @@ int main()
 	NeuralNetwork network(
 		LinearLayer(dataset_train.input_dim(), 512, "Dense1"),
 		ReLUActivation(),
-		DropoutLayer(gen, 0.2),
+		DropoutLayer(&gen, 0.2),
 
 		LinearLayer(512, 256, "Dense2"),
 		ReLUActivation(),
-		DropoutLayer(gen, 0.2),
+		DropoutLayer(&gen, 0.2),
 
 		LinearLayer(256, 10, "Dense3"),
 		SoftmaxActivation()

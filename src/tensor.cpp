@@ -69,10 +69,3 @@ void Tensor::fill(f32 value)
 		get()[i] = value;
 	}
 }
-
-Tensor Tensor::steal_memory()
-{
-	Tensor t = *this;
-	this->buffer.reset();
-	return std::move(t);
-}

@@ -30,8 +30,6 @@ struct Tensor
 	void set_zeros();
 	void fill(f32 value);
 
-	Tensor steal_memory();
-
 private:
 	std::shared_ptr<TensorBuffer> buffer;
 };
