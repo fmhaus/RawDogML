@@ -49,6 +49,10 @@ static void train(NeuralNetwork& network, Dataset& dataset_train, Dataset& datas
 	for (u32 i = 0; i < dataset_train.size(); i++)
 		train_indices[i] = i;
 
+	StateDict model_state;
+	f32 best_val_loss = 1e30;
+	f32 best_val_percent = 0;
+
 	for (u32 epoch = 0; epoch < N_EPOCHS; epoch++)
 	{
 		std::cout << "Learning rate: " << learning_rate << std::endl;
@@ -64,12 +68,12 @@ static void train(NeuralNetwork& network, Dataset& dataset_train, Dataset& datas
 		{
 			u32 train_index = train_indices[i];
 
-			u32 truth_index = dataset_train.labels[train_index];
+			u32 label_truth = dataset_train.labels[train_index];
 
 			auto& result = network.forward(dataset_train.images[train_index]);
-			total_train_loss += loss_criterion.get_loss(result, truth_index);
+			total_train_loss += loss_criterion.get_loss(result, label_truth);
 
-			auto& loss_grad = loss_criterion.calculate_loss_gradients(result, truth_index);
+			auto& loss_grad = loss_criterion.calculate_loss_gradients(result, label_truth);
 			network.backward(loss_grad);
 
 			acc_counter++;
@@ -101,16 +105,22 @@ static void train(NeuralNetwork& network, Dataset& dataset_train, Dataset& datas
 		}
 
 		f32 percent = (f32)correct / (f32)dataset_test.size() * 100.0;
+		float avg_val_loss = total_test_loss / dataset_train.size();
+		if (avg_val_loss < best_val_loss)
+		{
+			best_val_loss = avg_val_loss;
+			best_val_percent = percent;
+			network.save_state_dict(model_state);
+		}
 
-		std::cout << "Epoch " << (epoch + 1) << " testing complete. avg_loss: " << (total_test_loss / dataset_train.size()) << " Correct: " << percent << "% " << std::endl;
+		std::cout << "Epoch " << (epoch + 1) << " testing complete. avg_loss: " << avg_val_loss << " Correct: " << percent << "% " << std::endl;
 
 		learning_rate *= LEARNING_RATE_DECAY_FACTOR;
 	}
 
 	// Save final result
-	StateDict state;
-	network.save_state_dict(state);
-	state.save_to_file(STATE_DICT_FILE);
+	model_state.save_to_file(STATE_DICT_FILE);
+	std::cout << "Saved to " << STATE_DICT_FILE << " with " << best_val_percent << "% Accuracy.";
 }
 
 int main() 

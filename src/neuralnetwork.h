@@ -11,7 +11,7 @@
 
 struct Parameter
 {
-	Parameter(u32 size, const std::string& name);
+	Parameter(TensorShape&& shape, const std::string& name);
 
 	void init_normal_dist(std::mt19937& gen, f32 mean, f32 stddev);
 
@@ -51,6 +51,8 @@ struct LinearLayer : Layer
 	void init_params(std::mt19937& gen) override;
 	void get_params(std::vector<Parameter*>& params) override;
 
+	bool use_biases() const;
+
 	u32 in_features, out_features;
 
 	Parameter weights, biases;
@@ -79,6 +81,7 @@ struct ReLUActivation : Layer
 	Tensor& backward(const Tensor& out_grad) override;
 };
 
+// softmax is currently on all dims
 struct SoftmaxActivation : Layer
 {
 	Tensor& forward(const Tensor& in_act) override;

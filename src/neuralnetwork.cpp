@@ -4,15 +4,21 @@
 #include <cmath>
 #include <iostream>
 
-inline static void ensure_tensor_size(Tensor* tensor, s32 size)
+inline static void ensure_tensor_size(Tensor* tensor, const Tensor& requirement)
 {
-	if (tensor->size() < size)
+	if (tensor->shape() != requirement.shape())
+		*tensor = Tensor(requirement.shape());
+}
+
+inline static void ensure_tensor_size_1D(Tensor* tensor, usz size)
+{
+	if (tensor->shape().numel() < size)
 		*tensor = Tensor(size);
 }
 
-Parameter::Parameter(u32 size, const std::string& name)
+Parameter::Parameter(TensorShape&& shape, const std::string& name)
 	: name(name),
-	data(size),
+	data(shape),
 	grad()
 { }
 
@@ -27,7 +33,7 @@ void Parameter::init_normal_dist(std::mt19937& gen, f32 mean, f32 stddev)
 
 void Parameter::zero_gradients()
 {
-	ensure_tensor_size(&grad, data.size());
+	ensure_tensor_size(&grad, data);
 	grad.set_zeros();
 }
 
@@ -43,8 +49,8 @@ void Parameter::optimize(f32 learning_rate)
 LinearLayer::LinearLayer(u32 in_features, u32 out_features, const std::string& name, bool bias)
 	: in_features(in_features), 
 	out_features(out_features), 
-	weights(in_features * out_features, name + ".weights"),
-	biases(bias ? out_features : 0, name + ".biases")
+	weights(TensorShape(out_features, in_features), name + ".weights"),
+	biases(TensorShape(bias ? out_features : 0), name + ".biases")
 {
 }
 
@@ -53,22 +59,22 @@ Tensor& LinearLayer::forward(const Tensor& in_act)
 	assert(in_act.size() == in_features);
 	saved_in_act = in_act;
 
-	ensure_tensor_size(&out_act, out_features);
+	ensure_tensor_size_1D(&out_act, out_features);
 
 	// zero out_act
 	out_act.set_zeros();
 
-	bool use_biases = biases.data.size() > 0;
+	bool bias = use_biases();
 
 	// do linear feed forward
 	#pragma omp parallel for
 	for (s32 j = 0; j < out_features; j++)
 	{
-		f32 sum = use_biases ? biases.data[j] : 0.0;
+		f32 sum = bias ? biases.data[j] : 0.0;
 
 		for (s32 i = 0; i < in_features; i++)
 		{
-			sum += weights.data[j * in_features + i] * in_act[i];
+			sum += weights.data[j, i] * in_act[i];
 		}
 		out_act[j] = sum;
 	}
@@ -82,11 +88,11 @@ Tensor& LinearLayer::backward(const Tensor& out_grad)
 	assert(weights.grad.size() == weights.data.size());
 	assert(biases.grad.size() == biases.data.size());
 
-	ensure_tensor_size(&in_grad, in_features);
+	ensure_tensor_size_1D(&in_grad, in_features);
 
 	in_grad.set_zeros();
 
-	if (biases.data.size() > 0)
+	if (use_biases())
 	{
 		for (s32 j = 0; j < out_features; j++)
 			biases.grad[j] += out_grad[j];
@@ -97,9 +103,9 @@ Tensor& LinearLayer::backward(const Tensor& out_grad)
 	{
 		for (s32 i = 0; i < in_features; i++)
 		{
-			weights.grad[j * in_features + i] += saved_in_act[i] * out_grad[j];
+			weights.grad[j, i] += saved_in_act[i] * out_grad[j];
 
-			in_grad[i] += weights.data[j * in_features + i] * out_grad[j];
+			in_grad[i] += weights.data[j, i] * out_grad[j];
 		}
 	}
 
@@ -115,8 +121,13 @@ void LinearLayer::init_params(std::mt19937& gen)
 void LinearLayer::get_params(std::vector<Parameter*>& params)
 {
 	params.push_back(&weights);
-	if (biases.data.size())
+	if (use_biases())
 		params.push_back(&biases);
+}
+
+bool LinearLayer::use_biases() const
+{
+	return biases.data.size() > 0;
 }
 
 Tensor& SequentialLayer::forward(const Tensor& in_act)
@@ -193,7 +204,7 @@ void SequentialLayer::train()
 
 Tensor& ReLUActivation::forward(const Tensor& in_act)
 {
-	ensure_tensor_size(&out_act, in_act.size());
+	ensure_tensor_size(&out_act, in_act);
 
 	#pragma omp parallel for
 	for (s32 i = 0; i < in_act.size(); i++)
@@ -206,7 +217,7 @@ Tensor& ReLUActivation::forward(const Tensor& in_act)
 
 Tensor& ReLUActivation::backward(const Tensor& out_grad)
 {
-	ensure_tensor_size(&in_grad, out_grad.size());
+	ensure_tensor_size(&in_grad, out_grad);
 
 	#pragma omp parallel for
 	for (s32 i = 0; i < out_grad.size(); i++)
@@ -222,7 +233,7 @@ Tensor& SoftmaxActivation::forward(const Tensor& in_act)
 	if (in_act.size() == 0)
 		return out_act;
 
-	ensure_tensor_size(&out_act, in_act.size());
+	ensure_tensor_size(&out_act, in_act);
 
 	f32 max_val = in_act[0];
 	for (s32 i = 1; i < in_act.size(); i++)
@@ -249,7 +260,7 @@ Tensor& SoftmaxActivation::forward(const Tensor& in_act)
 
 Tensor& SoftmaxActivation::backward(const Tensor& out_grad)
 {
-	ensure_tensor_size(&in_grad, out_grad.size());
+	ensure_tensor_size(&in_grad, out_grad);
 
 	in_grad.set_zeros();
 
@@ -285,8 +296,8 @@ Tensor& DropoutLayer::forward(const Tensor& in_act)
 		return out_act;
 	}
 
-	ensure_tensor_size(&out_act, in_act.size());
-	ensure_tensor_size(&mask, in_act.size());
+	ensure_tensor_size(&out_act, in_act);
+	ensure_tensor_size(&mask, in_act);
 
 	std::uniform_real_distribution<f32> dist(0.0, 1.0);
 	f32 pass_chance = 1.0 - dropout_chance;
@@ -316,7 +327,7 @@ Tensor& DropoutLayer::backward(const Tensor& out_grad)
 	}
 	else
 	{
-		ensure_tensor_size(&in_grad, out_grad.size());
+		ensure_tensor_size(&in_grad, out_grad);
 
 		#pragma omp parallel for
 		for (s32 i = 0; i < out_grad.size(); i++)
@@ -349,7 +360,7 @@ f32 CrossEntropyLoss::get_loss(const Tensor& act, u32 truth_index)
 
 Tensor& CrossEntropyLoss::calculate_loss_gradients(const Tensor& act, u32 truth_index)
 {
-	ensure_tensor_size(&grad, act.size());
+	ensure_tensor_size(&grad, act);
 
 	grad.set_zeros();
 	grad[truth_index] = -1.0 / act[truth_index];
@@ -361,7 +372,7 @@ void NeuralNetwork::zero_gradients()
 {
 	for (auto& param : params)
 	{
-		ensure_tensor_size(&param->grad, param->data.size());
+		ensure_tensor_size(&param->grad, param->data);
 		param->grad.set_zeros();
 	}
 }
@@ -381,9 +392,11 @@ void NeuralNetwork::load_state_dict(const StateDict& state_dict)
 		if (state_dict.contains(param->name))
 		{
 			const Tensor& saved_tensor = state_dict.get(param->name);
-			if (saved_tensor.size() != param->data.size())
+			if (saved_tensor.shape() != param->data.shape())
 			{
-				std::cerr << "Tensor dimension mismatch. Key: " << param->name << " Saved: " << saved_tensor.size() << " Required: " << param->data.size() << std::endl;
+				std::cerr << "Tensor dimension mismatch. Key: " << param->name 
+					<< " Saved: " << saved_tensor.shape().to_string() 
+					<< " Required: " << param->data.shape().to_string() << std::endl;
 			}
 			else
 			{
@@ -401,7 +414,7 @@ void NeuralNetwork::save_state_dict(StateDict& state_dict) const
 {
 	for (auto& param : params)
 	{
-		state_dict.put(param->name, param->data);
+		state_dict.put(param->name, param->data.clone());
 	}
 }
 

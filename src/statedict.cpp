@@ -3,7 +3,7 @@
 #include <fstream>
 
 static const u64 MAGIC_NUMBER = 0x21b41241;
-static const u64 CURRENT_FILE_VERSION = 1;
+static const u64 CURRENT_FILE_VERSION = 2;
 
 template <typename T>
 void write_raw(std::ofstream& fw, const T& data)
@@ -33,7 +33,7 @@ bool StateDict::contains(const std::string& name) const
 
 void StateDict::put(const std::string& name, Tensor tensor)
 {
-	states.insert_or_assign(name, tensor);
+	states.insert_or_assign(name, std::move(tensor));
 }
 
 Tensor StateDict::get(const std::string& key) const
@@ -57,7 +57,9 @@ void StateDict::save_to_file(const std::string& file)
 		write_raw(fw, (u64)pair.first.length());
 		fw.write(pair.first.c_str(), pair.first.length());
 
-		write_raw(fw, (u64)pair.second.size());
+		write_raw(fw, (u64)pair.second.shape().length());
+		for (usz dim : pair.second.shape().dims)
+			write_raw(fw, (u64) dim);
 
 		fw.write(reinterpret_cast<const char*>(pair.second.get()), sizeof(f32) * pair.second.size());
 	}
@@ -78,23 +80,33 @@ void StateDict::load_from_file(const std::string& file)
 	}
 
 	read_raw(fr, version);
-	if (version == 1)
+	if (version == 2)
 	{
-
 		u64 count;
 		read_raw(fr, count);
 
 		for (u64 i = 0; i < count; i++)
 		{
-			u64 str_len, tensor_len;
+			u64 str_len;
 			read_raw(fr, str_len);
 
 			std::string name(str_len, '\0');
 			fr.read(&name[0], str_len);
 
-			read_raw(fr, tensor_len);
-			Tensor tensor(tensor_len);
-			fr.read(reinterpret_cast<char*>(tensor.get()), tensor_len * sizeof(f32));
+
+			u64 shape_len;
+			read_raw(fr, shape_len);
+			std::vector<usz> shape;
+			shape.resize(shape_len);
+			for (usz i = 0; i < shape_len; i++)
+			{
+				u64 size;
+				read_raw(fr, size);
+				shape[i] = size;
+			}
+
+			Tensor tensor(std::move(shape));
+			fr.read(reinterpret_cast<char*>(tensor.get()), tensor.size() * sizeof(f32));
 
 			states.try_emplace(std::move(name), std::move(tensor));
 		}
@@ -102,6 +114,6 @@ void StateDict::load_from_file(const std::string& file)
 	}
 	else
 	{
-		throw std::runtime_error("Unsupported version!");
+		throw std::runtime_error(std::string("Unsupported version: ") + std::to_string(version));
 	}
 }
